@@ -1,0 +1,2 @@
+//Câu lệnh để generate file
+dart read.dart [tên file config] [tên file đầu vào] [tên file đầu ra]

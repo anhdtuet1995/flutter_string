@@ -114,7 +114,8 @@ void handleOutputFile(String outputFileName, Map<String, GenerateModel> data, Co
 
 main(List<String> params) {
   final configPath = params[0];
-  final outputFileName = params[1];
+  final outputFileName = params[2];
+  final inputFileName = params[1];
   final textType = "text";
   final jsonType = "json";
 
@@ -123,6 +124,10 @@ main(List<String> params) {
   }
 
   if (outputFileName == null && outputFileName.length == 0) {
+    return;
+  }
+
+  if (inputFileName == null && inputFileName.length == 0) {
     return;
   }
 
@@ -141,7 +146,7 @@ main(List<String> params) {
   );
 
   Config config = readFile(configPath);
-  print(config.outputType);
+  config.filePath = inputFileName;
 
   if (config == null) {
     print("Something has wrong with config file!");

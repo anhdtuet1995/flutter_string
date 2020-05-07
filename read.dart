@@ -2,10 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
-void readConfig() {
-
-}
-
 int convertToIndex(int code) {
   if (code >= 'a'.codeUnitAt(0) && code <= 'z'.codeUnitAt(0)) {
     return code - 'a'.codeUnitAt(0);
@@ -72,8 +68,12 @@ String handleCamel(String text) {
   return result;
 }
 
-main() {
-  final configPath = 'config.txt';
+main(List<String> params) {
+  final configPath = params[0];
+  if (configPath == null && configPath.length == 0) {
+    return;
+  }
+  
   final normalFormat = "#";
   final camelFormat = "#^";
 
@@ -112,8 +112,6 @@ main() {
       headerIndexes.add(item);
     }
   }
-  
-  print(headerIndexes);
 
   final File file = new File(path);
   Stream<List> inputStream = file.openRead();
@@ -131,25 +129,26 @@ main() {
         data.add(row);
       },
       onDone: () {
+        
+        print(data);
 
         //đọc thông tin từ file csv
         for (var i = 0; i < headerIndexes.length; i++) {
           String excelIndex = headerIndexes[i];
           excelIndex = excelIndex.replaceAll(camelFormat, "");
           excelIndex = excelIndex.replaceAll(normalFormat, "");
-          print(excelIndex);
           //Lấy vị trí cột hiện tại
           int x = convertToIndex(excelIndex.codeUnitAt(0));
           
           String key = "";
           List<String> value = [];
-
-          for (var j = startRow; j < data[0].length; j++) {
+          
+          for (var j = startRow; j < data.length; j++) {
             if (j == startRow) {
               key = getData(data, j, x);
             } else {
               value.add(data[j][x]);
-            }  
+            }
           }
           GenerateModel model = new GenerateModel(key, value);
           config.headerIndexes.add(excelIndex);

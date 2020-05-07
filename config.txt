@@ -1,3 +1,4 @@
+output_type json
 excel_file_name a.csv
-format String get#^A() => map["#D"];
+format "#A": "#B",
 start_row 0

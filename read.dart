@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
+final normalFormat = "#";
+final camelFormat = "#^";
+
 int convertToIndex(int code) {
   if (code >= 'a'.codeUnitAt(0) && code <= 'z'.codeUnitAt(0)) {
     return code - 'a'.codeUnitAt(0);
@@ -9,24 +12,26 @@ int convertToIndex(int code) {
     return code - 'A'.codeUnitAt(0);
   } else if (code >= '1'.codeUnitAt(0) && code <= '9'.codeUnitAt(0)) {
     return code - '1'.codeUnitAt(0);
-  } else return -1;
+  } else
+    return -1;
 }
 
-List<String> getHeaders(String format) {
-
-}
+List<String> getHeaders(String format) {}
 
 //x là hàng, y là cột
 String getData(List<List<String>> result, int x, int y) {
   return result[x][y];
 }
 
-Iterable<String> _allStringMatches(String text, RegExp regExp) => regExp.allMatches(text).map((m) => m.group(0));
+Iterable<String> _allStringMatches(String text, RegExp regExp) =>
+    regExp.allMatches(text).map((m) => m.group(0));
 
 Config readFile(String configUrl) {
   final fileNameTitle = "excel_file_name";
   final formatTitle = "format";
   final startRowTitle = "start_row";
+  final outputTypeTitle = "output_type";
+
   Config config = new Config();
   File file = new File(configUrl);
   try {
@@ -44,6 +49,10 @@ Config readFile(String configUrl) {
         //Lấy ra vị trí của dòng chưa thông tin các title
         String startRow = line.substring(startRowTitle.length + 1);
         config.startRow = int.parse(startRow);
+      } else if (line.contains(outputTypeTitle)) {
+        //Lấy ra vị trí của dòng chưa thông tin các title
+        String outputType = line.substring(outputTypeTitle.length + 1);
+        config.outputType = outputType;
       }
     }
     return config;
@@ -68,28 +77,72 @@ String handleCamel(String text) {
   return result;
 }
 
+void handleOutputFile(String outputFileName, Map<String, GenerateModel> data, Config config, bool isJson) {
+  File outputFile = new File(outputFileName);
+  var outputStream = outputFile.openWrite();
+  if (isJson) {
+    outputStream.writeln("{");
+  }
+  if (config.headerIndexes.length > 0) {
+    String firstKey = config.headerIndexes[0];
+    int childCount = data[firstKey].value.length;
+    for (int i = 0; i < childCount; i++) {
+      String stringAfterFormat = config.format;
+      if (isJson && i == childCount - 1) {
+        if (stringAfterFormat.contains(',')) {
+          stringAfterFormat = stringAfterFormat.replaceAll(',', '');
+        }
+      }
+      for (int j = 0; j < config.headerIndexes.length; j++) {
+        String currentKey = config.headerIndexes[j];
+        String currentValue = data[currentKey].value[i];
+        stringAfterFormat = stringAfterFormat.replaceAll(
+            normalFormat + currentKey, currentValue);
+        String camel = handleCamel(currentValue);
+        stringAfterFormat = stringAfterFormat.replaceAll(
+            camelFormat + currentKey,
+            camel[0].toUpperCase() + camel.substring(1));
+      }
+      outputStream.writeln('\t$stringAfterFormat');
+    }
+  }
+  if (isJson) {
+    outputStream.writeln("}");
+  }
+  outputStream.close();
+}
+
 main(List<String> params) {
   final configPath = params[0];
+  final outputFileName = params[1];
+  final textType = "text";
+  final jsonType = "json";
+
   if (configPath == null && configPath.length == 0) {
     return;
   }
-  
-  final normalFormat = "#";
-  final camelFormat = "#^";
+
+  if (outputFileName == null && outputFileName.length == 0) {
+    return;
+  }
 
   //Trường hợp lấy ra text thường
-  RegExp reqExp = new RegExp(r"#\w", 
+  RegExp reqExp = new RegExp(
+    r"#\w",
     caseSensitive: false,
     multiLine: false,
   );
 
   //Trường hợp lấy ra text camel
-  RegExp reqExpCamel = new RegExp(r"#\^\w", 
+  RegExp reqExpCamel = new RegExp(
+    r"#\^\w",
     caseSensitive: false,
     multiLine: false,
   );
 
   Config config = readFile(configPath);
+  print(config.outputType);
+
   if (config == null) {
     print("Something has wrong with config file!");
     return;
@@ -121,68 +174,54 @@ main(List<String> params) {
   //value là một object chứa key (nằm ở dòng đầu tiên trong file excel kể từ start_row (config file)) và value là danh sách các giá trị của từng key
   Map<String, GenerateModel> result = new Map();
 
-  inputStream
-      .transform(utf8.decoder)
-      .transform(new LineSplitter())
-      .listen((String line) {
-        List<String> row = line.split(',');
-        data.add(row);
-      },
-      onDone: () {
-        
-        print(data);
+  inputStream.transform(utf8.decoder).transform(new LineSplitter()).listen(
+      (String line) {
+    List<String> row = line.split(',');
+    data.add(row);
+  }, onDone: () {
+    //đọc thông tin từ file csv
+    for (var i = 0; i < headerIndexes.length; i++) {
+      String excelIndex = headerIndexes[i];
+      excelIndex = excelIndex.replaceAll(camelFormat, "");
+      excelIndex = excelIndex.replaceAll(normalFormat, "");
+      //Lấy vị trí cột hiện tại
+      int x = convertToIndex(excelIndex.codeUnitAt(0));
 
-        //đọc thông tin từ file csv
-        for (var i = 0; i < headerIndexes.length; i++) {
-          String excelIndex = headerIndexes[i];
-          excelIndex = excelIndex.replaceAll(camelFormat, "");
-          excelIndex = excelIndex.replaceAll(normalFormat, "");
-          //Lấy vị trí cột hiện tại
-          int x = convertToIndex(excelIndex.codeUnitAt(0));
-          
-          String key = "";
-          List<String> value = [];
-          
-          for (var j = startRow; j < data.length; j++) {
-            if (j == startRow) {
-              key = getData(data, j, x);
-            } else {
-              value.add(data[j][x]);
-            }
-          }
-          GenerateModel model = new GenerateModel(key, value);
-          config.headerIndexes.add(excelIndex);
-          result[excelIndex] = model;
-        }
+      String key = "";
+      List<String> value = [];
 
-        //Xử lý để in ra file kết quả
-        if (config.headerIndexes.length > 0) {
-          String firstKey = config.headerIndexes[0];
-          int childCount = result[firstKey].value.length;
-          for (int i = 0; i < childCount; i++) {
-            String stringAfterFormat = config.format;
-            for (int j = 0; j < config.headerIndexes.length; j++) {
-              String currentKey = config.headerIndexes[j];
-              String currentValue = result[currentKey].value[i];
-              stringAfterFormat = stringAfterFormat.replaceAll(normalFormat + currentKey, currentValue);
-              String camel = handleCamel(currentValue);
-              stringAfterFormat = stringAfterFormat.replaceAll(camelFormat + currentKey, camel[0].toUpperCase() + camel.substring(1));
-            }
-            print(stringAfterFormat);
-          }
+      for (var j = startRow; j < data.length; j++) {
+        if (j == startRow) {
+          key = getData(data, j, x);
+        } else {
+          value.add(data[j][x]);
         }
-      },
-      onError: (e) {
-        print(e.toString());
-      });     
+      }
+      GenerateModel model = new GenerateModel(key, value);
+      config.headerIndexes.add(excelIndex);
+      result[excelIndex] = model;
+    }
+
+    //Xử lý để in ra file kết quả
+    if (config.outputType == textType) {
+      //In ra file dạng text
+      handleOutputFile(outputFileName, result, config, false);
+    } else if (config.outputType == jsonType) {
+      //In ra file dạng json
+      handleOutputFile(outputFileName, result, config, true);
+    }
+
+  }, onError: (e) {
+    print(e.toString());
+  });
 }
 
 class Config {
   String filePath = "";
   int startRow = 0;
   String format = "";
+  String outputType = "";
   List<String> headerIndexes = [];
-  
 }
 
 class GenerateModel {

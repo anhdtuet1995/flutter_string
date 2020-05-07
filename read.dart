@@ -18,11 +18,6 @@ int convertToIndex(int code) {
 
 List<String> getHeaders(String format) {}
 
-//x là hàng, y là cột
-String getData(List<List<String>> result, int x, int y) {
-  return result[x][y];
-}
-
 Iterable<String> _allStringMatches(String text, RegExp regExp) =>
     regExp.allMatches(text).map((m) => m.group(0));
 
@@ -181,9 +176,10 @@ main(List<String> params) {
 
   inputStream.transform(utf8.decoder).transform(new LineSplitter()).listen(
       (String line) {
-    List<String> row = line.split(',');
+    List<String> row = line.split('\t');
     data.add(row);
   }, onDone: () {
+    print(data);
     //đọc thông tin từ file csv
     for (var i = 0; i < headerIndexes.length; i++) {
       String excelIndex = headerIndexes[i];
@@ -196,10 +192,20 @@ main(List<String> params) {
       List<String> value = [];
 
       for (var j = startRow; j < data.length; j++) {
+        String row = data[j][x];
+        row = row.replaceAll(new RegExp(r'\"\"', caseSensitive: false, multiLine: false), "");
+        if (row.startsWith("\"") && row.endsWith("\"")) {
+          if (row.length == 1 || row.length == 2) {
+            row = "";
+          } else {
+            row = row.substring(1, row.length - 1);
+          }
+        }
+        print(row);
         if (j == startRow) {
-          key = getData(data, j, x);
+          key = row;
         } else {
-          value.add(data[j][x]);
+          value.add(row);
         }
       }
       GenerateModel model = new GenerateModel(key, value);

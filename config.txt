@@ -1,3 +1,6 @@
-output_type json
-format "#A": "#C",
+prefix class Config {
+suffix }
+output_type code
+return_type_index B
+format final #B #A = #^^C;
 start_row 0

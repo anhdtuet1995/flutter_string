@@ -2,8 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
+final String textType = "text";
+final jsonType = "json";
+final codeType = "code";
+
 final normalFormat = "#";
 final camelFormat = "#^";
+final typeFormat = "#^^";
+final stringType = "string";
 
 int convertToIndex(int code) {
   if (code >= 'a'.codeUnitAt(0) && code <= 'z'.codeUnitAt(0)) {
@@ -26,6 +32,9 @@ Config readFile(String configUrl) {
   final formatTitle = "format";
   final startRowTitle = "start_row";
   final outputTypeTitle = "output_type";
+  final prefixTitle = "prefix";
+  final suffixTitle = "suffix";
+  final returnTypeIndexTitle = "return_type_index";
 
   Config config = new Config();
   File file = new File(configUrl);
@@ -45,9 +54,21 @@ Config readFile(String configUrl) {
         String startRow = line.substring(startRowTitle.length + 1);
         config.startRow = int.parse(startRow);
       } else if (line.contains(outputTypeTitle)) {
-        //Lấy ra vị trí của dòng chưa thông tin các title
+        //Lấy ra vị trí của dòng chứa output type
         String outputType = line.substring(outputTypeTitle.length + 1);
         config.outputType = outputType;
+      } else if (line.contains(prefixTitle)) {
+        //Lấy ra vị trí của dòng chứa tiền tố
+        String prefix = line.substring(prefixTitle.length + 1);
+        config.prefix = prefix;
+      } else if (line.contains(suffixTitle)) {
+        //Lấy ra vị trí của dòng chứa hậu tố
+        String suffix = line.substring(suffixTitle.length + 1);
+        config.suffix = suffix;
+      } else if (line.contains(returnTypeIndexTitle)) {
+        //Lấy ra vị trí cột chứa thông tin giá trị trả về
+        String returnTypeIndex = line.substring(returnTypeIndexTitle.length + 1);
+        config.returnTypeIndex = returnTypeIndex;
       }
     }
     return config;
@@ -75,9 +96,7 @@ String handleCamel(String text) {
 void handleOutputFile(String outputFileName, Map<String, GenerateModel> data, Config config, bool isJson) {
   File outputFile = new File(outputFileName);
   var outputStream = outputFile.openWrite();
-  if (isJson) {
-    outputStream.writeln("{");
-  }
+  outputStream.writeln(config.prefix == null ? "" : config.prefix);
   if (config.headerIndexes.length > 0) {
     String firstKey = config.headerIndexes[0];
     int childCount = data[firstKey].value.length;
@@ -91,19 +110,32 @@ void handleOutputFile(String outputFileName, Map<String, GenerateModel> data, Co
       for (int j = 0; j < config.headerIndexes.length; j++) {
         String currentKey = config.headerIndexes[j];
         String currentValue = data[currentKey].value[i];
+        
+        //Thay thế #A bằng text
         stringAfterFormat = stringAfterFormat.replaceAll(
             normalFormat + currentKey, currentValue);
+
+        //Thay thế #^A bằng dạng camel
         String camel = handleCamel(currentValue);
-        stringAfterFormat = stringAfterFormat.replaceAll(
+        if (camel.length > 0) {
+          stringAfterFormat = stringAfterFormat.replaceAll(
             camelFormat + currentKey,
             camel[0].toUpperCase() + camel.substring(1));
+        }
+        print("camel = ${camel} with length = ${camel.length}");
+
+
+        //Thay thế #^^A bằng dạng type
+        if (config.outputType == codeType && config.returnTypeIndex != null && config.returnTypeIndex.length > 0) {
+          String returnType = data[config.returnTypeIndex].value[i];
+          stringAfterFormat = stringAfterFormat.replaceAll(
+            typeFormat + currentKey, (returnType != null && returnType.toLowerCase() == stringType ? "\"$currentValue\"" : currentValue));
+        }
       }
-      outputStream.writeln('\t$stringAfterFormat');
+      outputStream.writeln('\t${stringAfterFormat.replaceAll(RegExp(' +'), ' ')}');
     }
   }
-  if (isJson) {
-    outputStream.writeln("}");
-  }
+  outputStream.writeln(config.suffix == null ? "" : config.suffix);
   outputStream.close();
 }
 
@@ -111,8 +143,7 @@ main(List<String> params) {
   final configPath = params[0];
   final outputFileName = params[2];
   final inputFileName = params[1];
-  final textType = "text";
-  final jsonType = "json";
+  
 
   if (configPath == null && configPath.length == 0) {
     return;
@@ -136,6 +167,13 @@ main(List<String> params) {
   //Trường hợp lấy ra text camel
   RegExp reqExpCamel = new RegExp(
     r"#\^\w",
+    caseSensitive: false,
+    multiLine: false,
+  );
+
+  //Trường hợp lấy ra text để convert dựa trên type
+  RegExp reqExpCode = new RegExp(
+    r"#\^\^\w",
     caseSensitive: false,
     multiLine: false,
   );
@@ -166,6 +204,16 @@ main(List<String> params) {
     }
   }
 
+  for (var item in _allStringMatches(format, reqExpCode)) {
+    if (!headerIndexes.contains(item)) {
+      headerIndexes.add(item);
+    }
+  }
+
+  if (config.returnTypeIndex != null && config.returnTypeIndex.length > 0 && !headerIndexes.contains(config.returnTypeIndex)) {
+    headerIndexes.add(config.returnTypeIndex);
+  }
+
   final File file = new File(path);
   Stream<List> inputStream = file.openRead();
   List<List<String>> data = [];
@@ -179,6 +227,7 @@ main(List<String> params) {
     if (inputFileName.endsWith(".txt")) {
       List<String> row = line.split('\t');
       data.add(row);
+      print(row);
     } else if (inputFileName.endsWith(".csv")) {
       List<String> row = line.split(new RegExp(r',(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)', multiLine: false, caseSensitive: false));
       data.add(row);
@@ -189,6 +238,8 @@ main(List<String> params) {
     //đọc thông tin từ file csv
     for (var i = 0; i < headerIndexes.length; i++) {
       String excelIndex = headerIndexes[i];
+      
+      excelIndex = excelIndex.replaceAll(typeFormat, "");
       excelIndex = excelIndex.replaceAll(camelFormat, "");
       excelIndex = excelIndex.replaceAll(normalFormat, "");
       //Lấy vị trí cột hiện tại
@@ -224,6 +275,9 @@ main(List<String> params) {
     } else if (config.outputType == jsonType) {
       //In ra file dạng json
       handleOutputFile(outputFileName, result, config, true);
+    } else if (config.outputType == codeType) {
+      //In ra file dạng json
+      handleOutputFile(outputFileName, result, config, false);
     }
     print("File $outputFileName was generated successfully!");
   }, onError: (e) {
@@ -237,6 +291,10 @@ class Config {
   String format = "";
   String outputType = "";
   List<String> headerIndexes = [];
+  List<String> returnTypes = [];
+  String prefix = "";
+  String suffix = "";
+  String returnTypeIndex = "";
 }
 
 class GenerateModel {

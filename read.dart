@@ -176,9 +176,16 @@ main(List<String> params) {
 
   inputStream.transform(utf8.decoder).transform(new LineSplitter()).listen(
       (String line) {
-    List<String> row = line.split('\t');
-    data.add(row);
+    if (inputFileName.endsWith(".txt")) {
+      List<String> row = line.split('\t');
+      data.add(row);
+    } else if (inputFileName.endsWith(".csv")) {
+      List<String> row = line.split(new RegExp(r',(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)', multiLine: false, caseSensitive: false));
+      data.add(row);
+    }
+    
   }, onDone: () {
+    if (data.length == 0) return;
     //đọc thông tin từ file csv
     for (var i = 0; i < headerIndexes.length; i++) {
       String excelIndex = headerIndexes[i];
@@ -189,7 +196,6 @@ main(List<String> params) {
 
       String key = "";
       List<String> value = [];
-
       for (var j = startRow; j < data.length; j++) {
         String row = data[j][x];
         row = row.replaceAll(new RegExp(r'\"\"', caseSensitive: false, multiLine: false), "");

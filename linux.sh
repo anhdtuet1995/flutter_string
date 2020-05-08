@@ -1,3 +1,7 @@
+# Require installing csvkit before using
+# Ubuntu: sudo apt-get install -y csvkit
+# Mac: brew install csvkit
+
 rm -rf output
 mkdir output
 

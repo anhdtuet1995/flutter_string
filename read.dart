@@ -179,7 +179,6 @@ main(List<String> params) {
     List<String> row = line.split('\t');
     data.add(row);
   }, onDone: () {
-    print(data);
     //đọc thông tin từ file csv
     for (var i = 0; i < headerIndexes.length; i++) {
       String excelIndex = headerIndexes[i];
@@ -201,7 +200,6 @@ main(List<String> params) {
             row = row.substring(1, row.length - 1);
           }
         }
-        print(row);
         if (j == startRow) {
           key = row;
         } else {
@@ -221,7 +219,7 @@ main(List<String> params) {
       //In ra file dạng json
       handleOutputFile(outputFileName, result, config, true);
     }
-
+    print("File $outputFileName was generated successfully!");
   }, onError: (e) {
     print(e.toString());
   });
